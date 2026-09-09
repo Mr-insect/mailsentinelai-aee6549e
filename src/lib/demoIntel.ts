@@ -99,7 +99,7 @@ export function domainOf(value: string): string {
 
 export function lookupDomainAgeDays(domain: string, hostile: boolean): number {
   const h = hashNum(domain);
-  return hostile ? 1 + (h % 45) : 900 + (h % 5000);
+  return hostile ? 1 + (h % 27) : 900 + (h % 5000);
 }
 
 export const REGISTRARS = [

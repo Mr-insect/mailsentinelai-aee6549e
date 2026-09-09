@@ -358,7 +358,8 @@ export function analyzeEmail(email: ParsedEmail): AnalysisResult {
     email.ips.length === 0,
   );
 
-  score = Math.min(100, score);
+  // Combine raw rule weights into a bounded 0-100 score (never exceeds 100).
+  score = Math.min(100, Math.round(100 * (1 - Math.exp(-score / 55))));
   const severity: Severity = score <= 20 ? "SAFE" : severityFromScore(score);
 
   // --- Classification --------------------------------------------------
