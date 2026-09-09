@@ -4,28 +4,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/*
- * Design system definition.
- *
- * The @theme inline block maps CSS custom properties to Tailwind utility
- * classes (e.g. --color-primary -> bg-primary, text-primary).
- *
- * The :root and .dark blocks define the actual color values using oklch.
- * All colors MUST use oklch format.
- *
- * To add a new semantic color:
- * 1. Add the variable to :root (light value) and .dark (dark value)
- * 2. Register it in @theme inline as --color-<name>: var(--<name>)
- */
-
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -45,7 +29,10 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-ring-offset-background: var(--background);
+  --color-critical: var(--critical);
+  --color-warning: var(--warning);
+  --color-safe: var(--safe);
+  --color-info: var(--info);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -59,77 +46,52 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --font-sans: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.984 0.003 247.858);
-  --sidebar-foreground: oklch(0.129 0.042 264.695);
-  --sidebar-primary: oklch(0.208 0.042 265.755);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.968 0.007 247.896);
-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-border: oklch(0.929 0.013 255.508);
-  --sidebar-ring: oklch(0.704 0.04 256.788);
+  --radius: 0.75rem;
+  --background: oklch(0.17 0.028 258);
+  --foreground: oklch(0.95 0.01 240);
+  --card: oklch(0.22 0.03 259);
+  --card-foreground: oklch(0.95 0.01 240);
+  --popover: oklch(0.21 0.03 259);
+  --popover-foreground: oklch(0.95 0.01 240);
+  --primary: oklch(0.78 0.14 205);
+  --primary-foreground: oklch(0.17 0.03 258);
+  --secondary: oklch(0.28 0.032 259);
+  --secondary-foreground: oklch(0.93 0.01 240);
+  --muted: oklch(0.27 0.03 259);
+  --muted-foreground: oklch(0.68 0.025 251);
+  --accent: oklch(0.32 0.05 245);
+  --accent-foreground: oklch(0.95 0.01 240);
+  --destructive: oklch(0.6 0.23 22);
+  --destructive-foreground: oklch(0.98 0.01 240);
+  --critical: oklch(0.62 0.23 22);
+  --warning: oklch(0.76 0.16 66);
+  --safe: oklch(0.75 0.18 155);
+  --info: oklch(0.78 0.14 205);
+  --border: oklch(0.33 0.035 253 / 60%);
+  --input: oklch(0.33 0.035 253 / 70%);
+  --ring: oklch(0.78 0.14 205 / 60%);
+  --chart-1: oklch(0.62 0.23 22);
+  --chart-2: oklch(0.76 0.16 66);
+  --chart-3: oklch(0.78 0.14 205);
+  --chart-4: oklch(0.66 0.19 300);
+  --chart-5: oklch(0.75 0.18 155);
+  --sidebar: oklch(0.19 0.03 259);
+  --sidebar-foreground: oklch(0.9 0.015 245);
+  --sidebar-primary: oklch(0.78 0.14 205);
+  --sidebar-primary-foreground: oklch(0.17 0.03 258);
+  --sidebar-accent: oklch(0.27 0.04 250);
+  --sidebar-accent-foreground: oklch(0.96 0.01 240);
+  --sidebar-border: oklch(0.32 0.035 253 / 60%);
+  --sidebar-ring: oklch(0.78 0.14 205 / 60%);
 }
 
 .dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.208 0.042 265.755);
-  --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
+  color-scheme: dark;
 }
 
 @layer base {
@@ -140,5 +102,90 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    background-image:
+      radial-gradient(900px 500px at 12% -10%, oklch(0.4 0.09 220 / 25%), transparent 60%),
+      radial-gradient(800px 500px at 95% 0%, oklch(0.4 0.1 275 / 18%), transparent 60%);
+    background-attachment: fixed;
+    font-feature-settings: "cv11", "ss01";
   }
+}
+
+@utility glass {
+  background:
+    linear-gradient(180deg, oklch(1 0 0 / 6%), oklch(1 0 0 / 2%)),
+    oklch(0.22 0.03 259 / 70%);
+  backdrop-filter: blur(14px);
+  border: 1px solid oklch(0.65 0.06 235 / 18%);
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 6%) inset,
+    0 18px 40px -24px oklch(0 0 0 / 80%);
+}
+
+@utility grid-scan {
+  background-image:
+    linear-gradient(oklch(0.78 0.14 205 / 7%) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(0.78 0.14 205 / 7%) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+@keyframes sentinel-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
+}
+
+@keyframes sentinel-sweep {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(400%);
+  }
+}
+
+@keyframes sentinel-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-pulse-dot {
+  animation: sentinel-pulse 1.6s ease-in-out infinite;
+}
+.animate-sweep {
+  animation: sentinel-sweep 2s linear infinite;
+}
+.animate-rise {
+  animation: sentinel-rise 0.45s ease-out both;
+}
+
+/* Leaflet dark tuning */
+.leaflet-container {
+  background: oklch(0.17 0.028 258);
+  font-family: var(--font-sans);
+}
+.leaflet-tile {
+  filter: invert(1) hue-rotate(190deg) brightness(0.92) contrast(0.92) saturate(0.7);
+}
+.leaflet-control-attribution,
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: oklch(0.22 0.03 259) !important;
+  color: oklch(0.9 0.01 240) !important;
+}
+.leaflet-control-zoom a {
+  background: oklch(0.22 0.03 259) !important;
+  color: oklch(0.9 0.01 240) !important;
+  border-color: oklch(0.35 0.04 250) !important;
 }
