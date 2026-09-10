@@ -11,6 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AnalyzerRouteImport } from './routes/analyzer'
+import { Route as ForensicsRouteImport } from './routes/forensics'
+import { Route as GeolocationRouteImport } from './routes/geolocation'
+import { Route as IocRouteImport } from './routes/ioc'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +25,58 @@ const AnalyzerRoute = AnalyzerRouteImport.update({
   path: '/analyzer',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ForensicsRoute = ForensicsRouteImport.update({
+  id: '/forensics',
+  path: '/forensics',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GeolocationRoute = GeolocationRouteImport.update({
+  id: '/geolocation',
+  path: '/geolocation',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IocRoute = IocRouteImport.update({
+  id: '/ioc',
+  path: '/ioc',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/analyzer': typeof AnalyzerRoute
+  '/forensics': typeof ForensicsRoute
+  '/geolocation': typeof GeolocationRoute
+  '/ioc': typeof IocRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/analyzer': typeof AnalyzerRoute
+  '/forensics': typeof ForensicsRoute
+  '/geolocation': typeof GeolocationRoute
+  '/ioc': typeof IocRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/analyzer': typeof AnalyzerRoute
+  '/forensics': typeof ForensicsRoute
+  '/geolocation': typeof GeolocationRoute
+  '/ioc': typeof IocRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/analyzer'
+  fullPaths: '/' | '/analyzer' | '/forensics' | '/geolocation' | '/ioc'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/analyzer'
-  id: '__root__' | '/' | '/analyzer'
+  to: '/' | '/analyzer' | '/forensics' | '/geolocation' | '/ioc'
+  id: '__root__' | '/' | '/analyzer' | '/forensics' | '/geolocation' | '/ioc'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AnalyzerRoute: typeof AnalyzerRoute
+  ForensicsRoute: typeof ForensicsRoute
+  GeolocationRoute: typeof GeolocationRoute
+  IocRoute: typeof IocRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +95,36 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AnalyzerRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/forensics': {
+      id: '/forensics'
+      path: '/forensics'
+      fullPath: '/forensics'
+      preLoaderRoute: typeof ForensicsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/geolocation': {
+      id: '/geolocation'
+      path: '/geolocation'
+      fullPath: '/geolocation'
+      preLoaderRoute: typeof GeolocationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ioc': {
+      id: '/ioc'
+      path: '/ioc'
+      fullPath: '/ioc'
+      preLoaderRoute: typeof IocRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AnalyzerRoute: AnalyzerRoute,
+  ForensicsRoute: ForensicsRoute,
+  GeolocationRoute: GeolocationRoute,
+  IocRoute: IocRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
