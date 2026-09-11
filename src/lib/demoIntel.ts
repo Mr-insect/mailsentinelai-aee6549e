@@ -81,7 +81,7 @@ export function severityFromScore(score: number): Severity {
 /** Offline geolocation + reputation lookup. Deterministic per IP. */
 export function lookupIp(ip: string, hostile: boolean): IpIntel {
   const h = hashNum(ip);
-  const geo = GEO_POOL[h % GEO_POOL.length];
+  const geo = GEO_POOL[h % GEO_POOL.length]!;
   const abuseScore = hostile ? 55 + (h % 45) : h % 22;
   const reputation: Reputation = abuseScore >= 75 ? "MALICIOUS" : abuseScore >= 40 ? "SUSPICIOUS" : "CLEAN";
   const risk: Severity = abuseScore >= 75 ? "CRITICAL" : abuseScore >= 40 ? "HIGH" : abuseScore >= 20 ? "MEDIUM" : "LOW";
@@ -110,18 +110,18 @@ export const REGISTRARS = [
 ];
 
 export function registrarFor(domain: string) {
-  return REGISTRARS[hashNum(domain) % REGISTRARS.length];
+  return REGISTRARS[hashNum(domain) % REGISTRARS.length]!;
 }
 
 export function looksLikeLookalike(domain: string): { hit: boolean; brand?: string } {
   const bare = domain.replace(/^www\./, "");
-  const label = bare.split(".")[0];
+  const label = bare.split(".")[0] ?? bare;
   for (const brand of LOOKALIKE_BRANDS) {
     if (bare.includes(brand) && !bare.endsWith(`${brand}.com`) && !bare.endsWith(".edu")) {
       return { hit: true, brand };
     }
     if (label.replace(/[-_0-9]/g, "").includes(brand)) return { hit: true, brand };
   }
-  if (/-(secure|login|verify|account|support|update)\b/.test(bare)) return { hit: true, brand: bare.split("-")[0] };
+  if (/-(secure|login|verify|account|support|update)\b/.test(bare)) return { hit: true, brand: bare.split("-")[0] ?? bare };
   return { hit: false };
 }

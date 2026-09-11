@@ -8,7 +8,7 @@ const PRIVATE_PREFIXES = ["10.", "127.", "192.168.", "0.", "255."];
 function isPublicIp(ip: string) {
   if (PRIVATE_PREFIXES.some((p) => ip.startsWith(p))) return false;
   if (ip.startsWith("172.")) {
-    const second = Number(ip.split(".")[1]);
+    const second = Number(ip.split(".")[1] ?? "0");
     if (second >= 16 && second <= 31) return false;
   }
   return true;
@@ -37,7 +37,7 @@ function unfoldHeaders(raw: string): { name: string; value: string }[] {
   const headers: { name: string; value: string }[] = [];
   for (const line of lines) {
     if (/^[ \t]/.test(line) && headers.length) {
-      headers[headers.length - 1].value += " " + line.trim();
+      headers[headers.length - 1]!.value += " " + line.trim();
     } else {
       const idx = line.indexOf(":");
       if (idx > 0) headers.push({ name: line.slice(0, idx).trim(), value: line.slice(idx + 1).trim() });
@@ -58,7 +58,7 @@ function all(headers: { name: string; value: string }[], name: string): string[]
 function parseAddress(value: string): { email: string; displayName: string } {
   if (!value) return { email: "", displayName: "" };
   const angle = value.match(/<([^>]+)>/);
-  const email = (angle ? angle[1] : value).trim().replace(/^mailto:/i, "");
+  const email = (angle ? angle[1]! : value).trim().replace(/^mailto:/i, "");
   let displayName = angle ? value.slice(0, value.indexOf("<")).trim() : "";
   displayName = displayName.replace(/^"|"$/g, "").trim();
   return { email, displayName };
@@ -68,7 +68,7 @@ function authFromResults(results: string, key: string): AuthStatus {
   const re = new RegExp(`${key}\\s*=\\s*([a-z]+)`, "i");
   const m = results.match(re);
   if (!m) return "UNKNOWN";
-  const v = m[1].toLowerCase();
+  const v = m[1]!.toLowerCase();
   if (v === "pass") return "PASS";
   if (v === "fail" || v === "softfail" || v === "permerror" || v === "reject") return "FAIL";
   if (v === "none" || v === "neutral") return "SUSPICIOUS";
@@ -88,15 +88,15 @@ function parseAttachments(body: string): ParsedAttachment[] {
   let m: RegExpExecArray | null;
   const seen = new Set<string>();
   while ((m = re.exec(body))) {
-    const filename = m[2].trim();
+    const filename = m[2]!.trim();
     if (!filename || seen.has(filename)) continue;
-    if (/^(text\/plain|text\/html|multipart)/i.test(m[1])) continue;
+    if (/^(text\/plain|text\/html|multipart)/i.test(m[1]!)) continue;
     seen.add(filename);
     const after = body.slice(m.index + m[0].length, m.index + m[0].length + 4000);
     const payload = after.replace(/[^A-Za-z0-9+/=]/g, "");
     out.push({
       filename,
-      contentType: m[1].trim(),
+      contentType: m[1]!.trim(),
       sizeLabel: humanSize(Math.max(1024, Math.round((payload.length * 3) / 4))),
       sha256: demoHash(filename + payload.slice(0, 512)),
     });

@@ -14,6 +14,9 @@ import { Route as AnalyzerRouteImport } from './routes/analyzer'
 import { Route as ForensicsRouteImport } from './routes/forensics'
 import { Route as GeolocationRouteImport } from './routes/geolocation'
 import { Route as IocRouteImport } from './routes/ioc'
+import { Route as ReportsRouteImport } from './routes/reports'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ThreatIntelligenceRouteImport } from './routes/threat-intelligence'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,6 +43,21 @@ const IocRoute = IocRouteImport.update({
   path: '/ioc',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReportsRoute = ReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ThreatIntelligenceRoute = ThreatIntelligenceRouteImport.update({
+  id: '/threat-intelligence',
+  path: '/threat-intelligence',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -47,6 +65,9 @@ export interface FileRoutesByFullPath {
   '/forensics': typeof ForensicsRoute
   '/geolocation': typeof GeolocationRoute
   '/ioc': typeof IocRoute
+  '/reports': typeof ReportsRoute
+  '/settings': typeof SettingsRoute
+  '/threat-intelligence': typeof ThreatIntelligenceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +75,9 @@ export interface FileRoutesByTo {
   '/forensics': typeof ForensicsRoute
   '/geolocation': typeof GeolocationRoute
   '/ioc': typeof IocRoute
+  '/reports': typeof ReportsRoute
+  '/settings': typeof SettingsRoute
+  '/threat-intelligence': typeof ThreatIntelligenceRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,13 +86,41 @@ export interface FileRoutesById {
   '/forensics': typeof ForensicsRoute
   '/geolocation': typeof GeolocationRoute
   '/ioc': typeof IocRoute
+  '/reports': typeof ReportsRoute
+  '/settings': typeof SettingsRoute
+  '/threat-intelligence': typeof ThreatIntelligenceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/analyzer' | '/forensics' | '/geolocation' | '/ioc'
+  fullPaths:
+    | '/'
+    | '/analyzer'
+    | '/forensics'
+    | '/geolocation'
+    | '/ioc'
+    | '/reports'
+    | '/settings'
+    | '/threat-intelligence'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/analyzer' | '/forensics' | '/geolocation' | '/ioc'
-  id: '__root__' | '/' | '/analyzer' | '/forensics' | '/geolocation' | '/ioc'
+  to:
+    | '/'
+    | '/analyzer'
+    | '/forensics'
+    | '/geolocation'
+    | '/ioc'
+    | '/reports'
+    | '/settings'
+    | '/threat-intelligence'
+  id:
+    | '__root__'
+    | '/'
+    | '/analyzer'
+    | '/forensics'
+    | '/geolocation'
+    | '/ioc'
+    | '/reports'
+    | '/settings'
+    | '/threat-intelligence'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -77,6 +129,9 @@ export interface RootRouteChildren {
   ForensicsRoute: typeof ForensicsRoute
   GeolocationRoute: typeof GeolocationRoute
   IocRoute: typeof IocRoute
+  ReportsRoute: typeof ReportsRoute
+  SettingsRoute: typeof SettingsRoute
+  ThreatIntelligenceRoute: typeof ThreatIntelligenceRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -116,6 +171,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IocRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reports': {
+      id: '/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof ReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/threat-intelligence': {
+      id: '/threat-intelligence'
+      path: '/threat-intelligence'
+      fullPath: '/threat-intelligence'
+      preLoaderRoute: typeof ThreatIntelligenceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -125,6 +201,9 @@ const rootRouteChildren: RootRouteChildren = {
   ForensicsRoute: ForensicsRoute,
   GeolocationRoute: GeolocationRoute,
   IocRoute: IocRoute,
+  ReportsRoute: ReportsRoute,
+  SettingsRoute: SettingsRoute,
+  ThreatIntelligenceRoute: ThreatIntelligenceRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
