@@ -97,7 +97,7 @@ function authExplain(name: "SPF" | "DKIM" | "DMARC", status: AuthStatus): string
       UNKNOWN: "No DMARC result was present in the message headers.",
     },
   };
-  return map[name][status];
+  return map[name]![status];
 }
 
 function analyzeUrls(email: ParsedEmail): UrlIntel[] {
@@ -290,7 +290,7 @@ export function analyzeEmail(email: ParsedEmail): AnalysisResult {
     "Credential harvesting language",
     credHit.length > 0,
     WEIGHTS.credentialLanguage,
-    credHit.length ? `Message asks the recipient to confirm credentials ("${credHit[0]}").` : "No credential-harvesting phrasing detected.",
+    credHit.length ? `Message asks the recipient to confirm credentials ("${credHit[0]!}").` : "No credential-harvesting phrasing detected.",
     "key-round",
   );
   const urgHit = URGENCY_KEYWORDS.filter((k) => bodyText.includes(k));
@@ -299,7 +299,7 @@ export function analyzeEmail(email: ParsedEmail): AnalysisResult {
     "Urgent / social-engineering language",
     urgHit.length > 0,
     WEIGHTS.urgencyLanguage,
-    urgHit.length ? `Pressure tactics detected ("${urgHit[0]}").` : "No urgency or pressure tactics detected.",
+    urgHit.length ? `Pressure tactics detected ("${urgHit[0]!}").` : "No urgency or pressure tactics detected.",
     "alarm-clock",
   );
 
@@ -374,7 +374,7 @@ export function analyzeEmail(email: ParsedEmail): AnalysisResult {
   const knownCount = indicators.filter((i) => i.status !== "UNKNOWN").length || 1;
   const confidence = Math.round((70 + (detectedCount / knownCount) * 28) * 10) / 10;
 
-  const geolocation = ipAnalysis.length ? (badIp ?? ipAnalysis[0]) : null;
+  const geolocation: IpIntel | null = ipAnalysis.length ? (badIp ?? ipAnalysis[0] ?? null) : null;
   const iocs = extractIocs(email, urlAnalysis, ipAnalysis, domainAnalysis, attachments);
 
   const recommendations =
@@ -442,7 +442,7 @@ export function analyzeEmail(email: ParsedEmail): AnalysisResult {
       authStatus: `SPF ${email.spfHeader} · DKIM ${email.dkimHeader} · DMARC ${email.dmarcHeader}`,
       risk: suspiciousSender ? (severity === "SAFE" ? "MEDIUM" : severity) : "LOW",
       lookalike: look.hit,
-      lookalikeOf: look.brand,
+      ...(look.brand ? { lookalikeOf: look.brand } : {}),
     },
     authenticationAnalysis: auth,
     urlAnalysis,

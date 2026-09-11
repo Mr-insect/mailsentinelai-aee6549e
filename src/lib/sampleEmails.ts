@@ -133,5 +133,5 @@ export const SAMPLE_EMAILS: SampleEmail[] = [
 ];
 
 export function getSample(id: SampleEmail["id"]): SampleEmail {
-  return SAMPLE_EMAILS.find((s) => s.id === id) ?? SAMPLE_EMAILS[0];
+  return SAMPLE_EMAILS.find((s) => s.id === id) ?? SAMPLE_EMAILS[0]!;
 }
