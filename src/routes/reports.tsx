@@ -101,7 +101,11 @@ function ReportsPage() {
           </Section>
 
           <Section title="Attachments">
-            <ReportList rows={r.attachments.map((a) => `${a.filename} — ${a.status} · ${a.sizeLabel} · ${a.sha256.slice(0, 24)}…`)} />
+            <ReportList
+              rows={r.attachments.map(
+                (a) => `${a.filename} — ${a.status} · ${a.sizeLabel} · SHA-256 ${a.sha256 || "UNAVAILABLE"}`,
+              )}
+            />
           </Section>
 
           <Section title="Forensic Timeline">
