@@ -71,13 +71,13 @@ async function localAnalyze(raw: string, bytes?: ArrayBuffer): Promise<AnalysisR
 
 export const emailAnalysisService = {
   /** Analyze raw .eml content (file upload or pasted text). */
-  async analyzeRawEmail(raw: string): Promise<AnalysisResult> {
+  async analyzeRawEmail(raw: string, fileBytes?: ArrayBuffer): Promise<AnalysisResult> {
     if (!raw || !raw.trim()) throw new AnalysisError("The email is empty. Paste content or upload an .EML file.");
     const remote = await tryBackend<AnalysisResult>(API_ROUTES.analyzeEmail, {
       method: "POST",
       body: JSON.stringify({ raw }),
     });
-    return remote ?? localAnalyze(raw);
+    return remote ?? (await localAnalyze(raw, fileBytes));
   },
 
   /** Read + analyze an uploaded file. */
@@ -88,12 +88,14 @@ export const emailAnalysisService = {
     }
     if (file.size > 8 * 1024 * 1024) throw new AnalysisError("File is too large. Please upload an .EML under 8 MB.");
     let text = "";
+    let bytes: ArrayBuffer | undefined;
     try {
-      text = await file.text();
+      bytes = await file.arrayBuffer();
+      text = new TextDecoder().decode(bytes);
     } catch {
       throw new AnalysisError("The file could not be read. Please try another .EML file.");
     }
-    return this.analyzeRawEmail(text);
+    return this.analyzeRawEmail(text, bytes);
   },
 
   async ipIntelligence(ip: string, fallback: IpIntel[]): Promise<IpIntel | null> {
