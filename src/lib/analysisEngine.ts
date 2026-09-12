@@ -11,7 +11,7 @@ import {
   registrarFor,
   severityFromScore,
 } from "./demoIntel";
-import { demoHash } from "./emailParser";
+import { investigationChecksum } from "./emailParser";
 import type {
   AnalysisResult,
   AttachmentIntel,
@@ -215,7 +215,9 @@ function extractIocs(
   });
   attachments.forEach((a) => {
     push({ type: "File", value: a.filename, reputation: a.reputation, risk: a.risk, source: "MIME attachment" });
-    push({ type: "Hash", value: a.sha256, reputation: a.reputation, risk: a.risk, source: "Attachment digest (demo)" });
+    if (a.sha256) {
+      push({ type: "Hash", value: a.sha256, reputation: a.reputation, risk: a.risk, source: "Attachment SHA-256 (Web Crypto)" });
+    }
   });
   return iocs;
 }
