@@ -47,7 +47,7 @@ function AnalyzerPage() {
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
   const run = useCallback(
-    async (content: string, label: string) => {
+    async (content: string, label: string, fileBytes?: ArrayBuffer) => {
       timers.current.forEach(clearTimeout);
       timers.current = [];
       setError(null);
@@ -62,7 +62,7 @@ function AnalyzerPage() {
 
       try {
         const [analysis] = await Promise.all([
-          emailAnalysisService.analyzeRawEmail(content),
+          emailAnalysisService.analyzeRawEmail(content, fileBytes),
           new Promise((r) => timers.current.push(setTimeout(r, ANALYSIS_STEPS.length * 190 + 350))),
         ]);
         setResult(analysis);
@@ -94,12 +94,14 @@ function AnalyzerPage() {
     async (file: File) => {
       setError(null);
       try {
-        const text = await file.text();
         const name = file.name.toLowerCase();
         if (!name.endsWith(".eml") && !name.endsWith(".txt")) {
           throw new AnalysisError("Invalid email file. Please upload a valid .EML file.");
         }
-        await run(text, file.name);
+        // Hash the real uploaded bytes, not a re-encoded string.
+        const bytes = await file.arrayBuffer();
+        const text = new TextDecoder().decode(bytes);
+        await run(text, file.name, bytes);
       } catch (err) {
         const message = err instanceof AnalysisError ? err.message : "The file could not be read. Please try another .EML file.";
         setError(message);
