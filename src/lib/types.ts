@@ -119,6 +119,8 @@ export interface SenderAnalysis {
 
 export interface AnalysisResult {
   investigationId: string;
+  /** Real SHA-256 of the full raw message bytes (Web Crypto). Empty if unavailable. */
+  messageSha256: string;
   analyzedAt: string;
   mode: "DEMO" | "LIVE";
   email: ParsedEmail;

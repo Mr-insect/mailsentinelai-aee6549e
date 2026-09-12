@@ -46,3 +46,25 @@ export function base64ToBytes(base64: string): Uint8Array | null {
     return null;
   }
 }
+
+/**
+ * Compute real SHA-256 digests for every parsed attachment, in place.
+ * Falls back to hashing the raw base64 text when the payload cannot be decoded,
+ * and leaves the value empty (surfaced as "UNAVAILABLE") if hashing fails.
+ */
+export async function hashAttachments(attachments: { sha256: string; payloadBase64?: string }[]): Promise<void> {
+  await Promise.all(
+    attachments.map(async (a) => {
+      const source = a.payloadBase64 ? (base64ToBytes(a.payloadBase64) ?? a.payloadBase64) : "";
+      if (!source || (typeof source !== "string" && source.length === 0)) {
+        a.sha256 = "";
+        return;
+      }
+      try {
+        a.sha256 = await sha256Hex(source);
+      } catch {
+        a.sha256 = "";
+      }
+    }),
+  );
+}
