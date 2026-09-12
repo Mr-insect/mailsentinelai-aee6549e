@@ -222,7 +222,8 @@ function extractIocs(
   return iocs;
 }
 
-export function analyzeEmail(email: ParsedEmail): AnalysisResult {
+export function analyzeEmail(email: ParsedEmail, options: { messageSha256?: string } = {}): AnalysisResult {
+  const messageSha256 = options.messageSha256 ?? "";
   const bodyText = `${email.subject}\n${email.body}`.toLowerCase();
   const indicators: Indicator[] = [];
   let score = 0;
@@ -423,8 +424,19 @@ export function analyzeEmail(email: ParsedEmail): AnalysisResult {
 
   const senderAnalysisDomain = domainAnalysis.find((d) => d.domain === senderDomain);
 
+  if (messageSha256) {
+    iocs.push({
+      type: "Hash",
+      value: messageSha256,
+      reputation: severity === "SAFE" ? "CLEAN" : "SUSPICIOUS",
+      risk: severity === "SAFE" ? "LOW" : severity,
+      source: "Message SHA-256 (Web Crypto)",
+    });
+  }
+
   return {
-    investigationId: `INV-${now.getFullYear()}-${demoHash(email.messageId + email.subject).slice(0, 6).toUpperCase()}`,
+    investigationId: `INV-${now.getFullYear()}-${(messageSha256 || investigationChecksum(email.messageId + email.subject)).slice(0, 6).toUpperCase()}`,
+    messageSha256,
     analyzedAt: now.toISOString(),
     mode: "DEMO",
     email,
