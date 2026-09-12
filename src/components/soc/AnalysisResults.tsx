@@ -77,6 +77,22 @@ export function AnalysisResults({ result }: { result: AnalysisResult }) {
               <Field label="Sender" value={result.email.from} mono />
               <Field label="Subject" value={result.email.subject} />
             </div>
+            {result.messageSha256 && (
+              <div className="rounded-lg border border-border/60 bg-muted/15 px-4 py-3">
+                <p className="flex flex-wrap items-center gap-2 text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
+                  Message SHA-256
+                  <span className="rounded border border-safe/40 bg-safe/10 px-1.5 py-0.5 text-[9px] tracking-[0.1em] text-safe normal-case">
+                    Cryptographically computed (Web Crypto)
+                  </span>
+                </p>
+                <button
+                  onClick={() => copy(result.messageSha256)}
+                  className="mt-1 flex items-start gap-1.5 font-mono text-[11px] break-all text-primary hover:underline"
+                >
+                  <Copy className="size-3 shrink-0" /> {result.messageSha256}
+                </button>
+              </div>
+            )}
             <div className="flex flex-wrap gap-2 pt-1">
               <Button asChild size="sm" variant="outline">
                 <Link to="/geolocation">View Geolocation</Link>
