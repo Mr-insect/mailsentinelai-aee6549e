@@ -14,8 +14,12 @@ function isPublicIp(ip: string) {
   return true;
 }
 
-/** Deterministic pseudo SHA-256-looking digest (demo only, no crypto claims). */
-export function demoHash(input: string): string {
+/**
+ * Short non-cryptographic identifier used ONLY to label an investigation
+ * (e.g. INV-2026-AB12CD). This is a checksum, not a hash of evidence —
+ * all evidence digests are real SHA-256 values from src/lib/hashing.ts.
+ */
+export function investigationChecksum(input: string): string {
   let h1 = 0x811c9dc5;
   let h2 = 0x1000193;
   for (let i = 0; i < input.length; i++) {
@@ -23,13 +27,7 @@ export function demoHash(input: string): string {
     h1 = (h1 * 16777619) >>> 0;
     h2 = (h2 + h1 * (i + 7)) >>> 0;
   }
-  let out = "";
-  let seed = (h1 ^ h2) >>> 0;
-  while (out.length < 64) {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    out += seed.toString(16).padStart(8, "0");
-  }
-  return out.slice(0, 64);
+  return ((h1 ^ h2) >>> 0).toString(16).padStart(8, "0");
 }
 
 function unfoldHeaders(raw: string): { name: string; value: string }[] {
@@ -92,13 +90,15 @@ function parseAttachments(body: string): ParsedAttachment[] {
     if (!filename || seen.has(filename)) continue;
     if (/^(text\/plain|text\/html|multipart)/i.test(m[1]!)) continue;
     seen.add(filename);
-    const after = body.slice(m.index + m[0].length, m.index + m[0].length + 4000);
-    const payload = after.replace(/[^A-Za-z0-9+/=]/g, "");
+    const after = body.slice(m.index + m[0].length, m.index + m[0].length + 400000);
+    const payload = after.split(/\n\s*\n|\n--/)[0]!.replace(/[^A-Za-z0-9+/=]/g, "");
     out.push({
       filename,
       contentType: m[1]!.trim(),
-      sizeLabel: humanSize(Math.max(1024, Math.round((payload.length * 3) / 4))),
-      sha256: demoHash(filename + payload.slice(0, 512)),
+      sizeLabel: humanSize(Math.max(1, Math.round((payload.length * 3) / 4))),
+      // Filled in by hashAttachments() with a real SHA-256 of the decoded bytes.
+      sha256: "",
+      payloadBase64: payload,
     });
   }
   return out;

@@ -6,7 +6,10 @@ export interface ParsedAttachment {
   filename: string;
   contentType: string;
   sizeLabel: string;
+  /** Real SHA-256 (64 hex chars) of the decoded attachment bytes. */
   sha256: string;
+  /** Raw base64 MIME payload, used to compute the digest. */
+  payloadBase64?: string;
 }
 
 export interface ParsedEmail {
