@@ -1,5 +1,6 @@
 import { analyzeEmail } from "@/lib/analysisEngine";
 import { EmailParseError, parseEml } from "@/lib/emailParser";
+import { hashAttachments, sha256Hex } from "@/lib/hashing";
 import type { AnalysisResult, DomainIntel, IpIntel, UrlIntel } from "@/lib/types";
 
 /**
@@ -48,10 +49,20 @@ async function tryBackend<T>(path: string, init?: RequestInit): Promise<T | null
 
 export class AnalysisError extends Error {}
 
-function localAnalyze(raw: string): AnalysisResult {
+async function localAnalyze(raw: string, bytes?: ArrayBuffer): Promise<AnalysisResult> {
   try {
     const parsed = parseEml(raw);
-    return analyzeEmail(parsed);
+    // Real SHA-256 (Web Crypto) of the original file bytes when available,
+    // otherwise of the raw message text. Modular: this call can be moved to
+    // a FastAPI endpoint without touching the analysis engine.
+    let messageSha256 = "";
+    try {
+      messageSha256 = await sha256Hex(bytes ?? raw);
+      await hashAttachments(parsed.attachments);
+    } catch {
+      messageSha256 = "";
+    }
+    return analyzeEmail(parsed, { messageSha256 });
   } catch (err) {
     if (err instanceof EmailParseError) throw new AnalysisError(err.message);
     throw new AnalysisError("Analysis failed. The message could not be processed.");
