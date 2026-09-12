@@ -335,13 +335,24 @@ export function AnalysisResults({ result }: { result: AnalysisResult }) {
                   <Field label="Size" value={a.sizeLabel} small />
                   <Field label="Status" value={a.status} small />
                   <div className="min-w-0">
-                    <p className="text-[10px] tracking-[0.14em] text-muted-foreground uppercase">SHA-256 (demo)</p>
-                    <button
-                      onClick={() => copy(a.sha256)}
-                      className="mt-0.5 flex items-center gap-1.5 font-mono text-[11px] break-all text-primary hover:underline"
-                    >
-                      <Copy className="size-3 shrink-0" /> {a.sha256.slice(0, 32)}…
-                    </button>
+                    <p className="flex flex-wrap items-center gap-1.5 text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
+                      SHA-256
+                      {a.sha256 && (
+                        <span className="rounded border border-safe/40 bg-safe/10 px-1.5 py-0.5 text-[9px] tracking-[0.1em] text-safe normal-case">
+                          Cryptographically computed
+                        </span>
+                      )}
+                    </p>
+                    {a.sha256 ? (
+                      <button
+                        onClick={() => copy(a.sha256)}
+                        className="mt-0.5 flex items-start gap-1.5 font-mono text-[11px] break-all text-primary hover:underline"
+                      >
+                        <Copy className="size-3 shrink-0" /> {a.sha256}
+                      </button>
+                    ) : (
+                      <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">UNAVAILABLE</p>
+                    )}
                   </div>
                 </div>
               </div>
