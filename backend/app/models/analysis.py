@@ -133,6 +133,12 @@ class DomainIntel(BaseModel):
     reply_mismatch: bool = False
     notes: list[str] = []
     providers: dict = {}
+    # Real DNS intelligence (additive; old frontends ignore unknown keys).
+    dnsStatus: str = "UNKNOWN"   # OK | NXDOMAIN | UNKNOWN
+    dnssec: str = "UNKNOWN"      # SIGNED | UNSIGNED | UNKNOWN
+    dnsRecords: dict = {}        # {"a": [...], "aaaa": [...], "mx": ..., "ns": ..., "txt": ..., "cname": ..., "ptr": [...]}
+    dnsLookups: dict = {}        # per-type query state: FOUND | MISSING | ERROR
+    resolvedIps: list[str] = []
 
 
 class Ioc(BaseModel):

@@ -1,9 +1,14 @@
 """Pipeline part 2: orchestrate parse -> enrich -> AI -> result."""
 from __future__ import annotations
 
+import logging
+from datetime import datetime, timezone
+
 from ..models.analysis import AnalysisResult
 from .ai_analyzer import ai_verdict
+from .auth_verify import verify_authentication
 from .cache import DOMAIN_CACHE, HASH_CACHE, norm_domain
+from .dns_intel import analyze_domain_dns
 from .domain_intel import analyze_domain_local
 from .enrich import MAX_DOMAINS, enrich_ips, enrich_urls, rep_live, risk_of
 from .forensics import attachment_forensics, auth_forensics
@@ -12,6 +17,8 @@ from .parse_core import parse_eml
 from .result_builder import build_result
 from .scoring import fuse_score
 from .threat_intel import virustotal_domain, virustotal_hash
+
+log = logging.getLogger("mailsentinel.pipeline")
 
 
 async def enrich_domains(parsed: dict, url_intel: list[dict],
@@ -35,6 +42,25 @@ async def enrich_domains(parsed: dict, url_intel: list[dict],
         rep = vrep
         if url_hit and url_hit.get("reputation") == "MALICIOUS":
             rep = "MALICIOUS"
+
+        # Real DNS intelligence (A/AAAA/MX/NS/TXT/CNAME/PTR/DNSSEC/existence).
+        # Failures degrade to UNKNOWN; they are never treated as malicious
+        # and never turned into fabricated records.
+        dns_detail = await analyze_domain_dns(d, settings.EXTERNAL_TIMEOUT_S)
+
+        # Real registration age ONLY from a configured provider (VirusTotal
+        # creation_date). Without a provider or data -> None (UNKNOWN),
+        # never a guess.
+        creation = vt.get("creation_date") if vt.get("available") else None
+        age_days = None
+        if isinstance(creation, (int, float)) and creation > 0:
+            try:
+                age_days = max(0, (datetime.now(timezone.utc) -
+                                   datetime.fromtimestamp(
+                                       creation, tz=timezone.utc)).days)
+            except Exception:
+                age_days = None
+
         notes = list(local.get("notes", []))
         if vt.get("available"):
             notes.append(f"VirusTotal: {vt.get('malicious', 0)} malicious")
@@ -44,10 +70,17 @@ async def enrich_domains(parsed: dict, url_intel: list[dict],
             notes.append("VirusTotal domain lookup unavailable.")
         else:
             notes.append("VirusTotal not configured - UNKNOWN.")
+        notes.extend(dns_detail["notes"])
         notes.append("Domain age is supporting evidence only, never decisive.")
-        row = {"domain": d, "ageDays": None,
+        row = {"domain": d, "ageDays": age_days,
                "registrar": vt.get("registrar", "") or "UNKNOWN",
-               "dns": "UNKNOWN", "reputation": rep,
+               "dns": dns_detail["summary"],
+               "dnsStatus": dns_detail["status"],
+               "dnssec": dns_detail["dnssec"],
+               "dnsRecords": dns_detail["records"],
+               "dnsLookups": dns_detail["lookups"],
+               "resolvedIps": dns_detail["resolved_ips"],
+               "reputation": rep,
                "risk": risk_of(rep if rep != "UNKNOWN" else "UNKNOWN"),
                "lookalike": bool(local.get("lookalike")),
                "registrable": local.get("registrable", ""),
@@ -59,7 +92,10 @@ async def enrich_domains(parsed: dict, url_intel: list[dict],
                "lookalike_of": local.get("lookalike_of"),
                "sender_mismatch": bool(local.get("sender_mismatch")),
                "reply_mismatch": bool(local.get("reply_mismatch")),
-               "notes": notes[:8], "providers": {"virustotal": vt}}
+               "notes": notes[:8],
+               "providers": {"virustotal": vt,
+                             "dns": {"status": dns_detail["status"],
+                                     "dnssec": dns_detail["dnssec"]}}}
         DOMAIN_CACHE.set(key, row, ttl_s=12 * 3600)
         out.append(row)
     return out
@@ -69,6 +105,24 @@ async def enrich_domains(parsed: dict, url_intel: list[dict],
 async def analyze_bytes(raw: bytes, settings) -> AnalysisResult:
     out = parse_eml(raw)
     parsed, sha = out["parsed"], out["message_sha256"]
+
+    # Local SPF/DKIM/DMARC verification (RFC 7208/6376/7489).  Authentication-
+    # Results headers are NOT trusted for scoring: their claims are captured
+    # first and kept as separate observed evidence in authForensics.
+    upstream_auth = {"spf": parsed.get("spfHeader"),
+                     "dkim": parsed.get("dkimHeader"),
+                     "dmarc": parsed.get("dmarcHeader")}
+    try:
+        auth_local = await verify_authentication(parsed, raw,
+                                                 settings.EXTERNAL_TIMEOUT_S)
+        parsed["spfHeader"] = auth_local["spfHeader"]
+        parsed["dkimHeader"] = auth_local["dkimHeader"]
+        parsed["dmarcHeader"] = auth_local["dmarcHeader"]
+    except Exception as exc:  # verification must never break the pipeline
+        log.warning("local authentication verification unavailable: %s",
+                    type(exc).__name__)
+        auth_local = None
+
     signals = heuristic_signals(parsed)
 
     url_intel, vt_mal, sb_n = await enrich_urls(parsed, settings)
@@ -101,6 +155,11 @@ async def analyze_bytes(raw: bytes, settings) -> AnalysisResult:
              "vt_hash_verdict": "checked"}
     score, indicators, threat = fuse_score(signals, intel, None, False)
     auth_fx = auth_forensics(parsed)
+    # Keep upstream Authentication-Results claims separate from local
+    # verification: observed header claims vs locally verified facts.
+    auth_fx["upstream_authentication_results"] = upstream_auth
+    auth_fx["local_verification"] = (auth_local or {}).get("local") or {
+        "available": False}
     evidence = sanitize_for_ai(parsed, intel, settings.AI_MAX_BODY_CHARS,
                                settings.AI_MAX_URLS,
                                extra={"auth_forensics": auth_fx,
