@@ -1,7 +1,34 @@
+/**
+ * EMAIL PARSER
+ * ------------
+ * Normalizes a raw .eml message into the `ParsedEmail` structure used by the
+ * analysis engine. MIME decoding primitives live in ./mime.ts.
+ *
+ * Security: uploaded email content is untrusted data. Nothing here executes
+ * attachments, evaluates scripts or active content, opens URLs or performs any
+ * network request — content is only decoded for static analysis. Malformed
+ * MIME parts are recorded as warnings and skipped instead of throwing.
+ *
+ * Modularity: the same normalized structure can later be produced by the
+ * FastAPI backend without touching analysisEngine.ts.
+ */
 import type { AuthStatus, ParsedAttachment, ParsedEmail } from "./types";
+import {
+  bytesToBase64,
+  decodeEncodedWords,
+  headerValue,
+  headerValues,
+  htmlToText,
+  humanSize,
+  parsePart,
+  splitHeadersAndBody,
+  walkParts,
+  type MimePart,
+} from "./mime";
 
 const IP_RE = /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g;
 const URL_RE = /https?:\/\/[^\s"'<>)\]]+/gi;
+const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 
 const PRIVATE_PREFIXES = ["10.", "127.", "192.168.", "0.", "255."];
 
@@ -30,36 +57,27 @@ export function investigationChecksum(input: string): string {
   return ((h1 ^ h2) >>> 0).toString(16).padStart(8, "0");
 }
 
-function unfoldHeaders(raw: string): { name: string; value: string }[] {
-  const lines = raw.split(/\r?\n/);
-  const headers: { name: string; value: string }[] = [];
-  for (const line of lines) {
-    if (/^[ \t]/.test(line) && headers.length) {
-      headers[headers.length - 1]!.value += " " + line.trim();
-    } else {
-      const idx = line.indexOf(":");
-      if (idx > 0) headers.push({ name: line.slice(0, idx).trim(), value: line.slice(idx + 1).trim() });
-    }
-  }
-  return headers;
-}
-
-function get(headers: { name: string; value: string }[], name: string): string {
-  const found = headers.find((h) => h.name.toLowerCase() === name.toLowerCase());
-  return found ? found.value : "";
-}
-
-function all(headers: { name: string; value: string }[], name: string): string[] {
-  return headers.filter((h) => h.name.toLowerCase() === name.toLowerCase()).map((h) => h.value);
-}
-
 function parseAddress(value: string): { email: string; displayName: string } {
   if (!value) return { email: "", displayName: "" };
-  const angle = value.match(/<([^>]+)>/);
-  const email = (angle ? angle[1]! : value).trim().replace(/^mailto:/i, "");
-  let displayName = angle ? value.slice(0, value.indexOf("<")).trim() : "";
+  const decoded = decodeEncodedWords(value);
+  const angle = decoded.match(/<([^>]+)>/);
+  const email = (angle ? angle[1]! : decoded).trim().replace(/^mailto:/i, "");
+  let displayName = angle ? decoded.slice(0, decoded.indexOf("<")).trim() : "";
   displayName = displayName.replace(/^"|"$/g, "").trim();
   return { email, displayName };
+}
+
+function parseAddressList(value: string): string[] {
+  if (!value) return [];
+  const decoded = decodeEncodedWords(value);
+  return Array.from(
+    new Set(
+      decoded
+        .split(",")
+        .map((chunk) => parseAddress(chunk).email)
+        .filter((e) => e.includes("@")),
+    ),
+  );
 }
 
 function authFromResults(results: string, key: string): AuthStatus {
@@ -73,34 +91,58 @@ function authFromResults(results: string, key: string): AuthStatus {
   return "UNKNOWN";
 }
 
-function humanSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+function domainOfUrl(url: string): string {
+  const m = url.match(/^https?:\/\/([^/?#:]+)/i);
+  return m ? m[1]!.toLowerCase() : "";
 }
 
-function parseAttachments(body: string): ParsedAttachment[] {
-  const out: ParsedAttachment[] = [];
-  const re =
-    /Content-Type:\s*([^;\r\n]+)[\s\S]{0,400}?(?:filename|name)\s*=\s*"?([^";\r\n]+)"?/gi;
-  let m: RegExpExecArray | null;
-  const seen = new Set<string>();
-  while ((m = re.exec(body))) {
-    const filename = m[2]!.trim();
-    if (!filename || seen.has(filename)) continue;
-    if (/^(text\/plain|text\/html|multipart)/i.test(m[1]!)) continue;
-    seen.add(filename);
-    const after = body.slice(m.index + m[0].length, m.index + m[0].length + 400000);
-    const payload = after.split(/\n\s*\n|\n--/)[0]!.replace(/[^A-Za-z0-9+/=]/g, "");
-    out.push({
-      filename,
-      contentType: m[1]!.trim(),
-      sizeLabel: humanSize(Math.max(1, Math.round((payload.length * 3) / 4))),
-      // Filled in by hashAttachments() with a real SHA-256 of the decoded bytes.
-      sha256: "",
-      payloadBase64: payload,
-    });
-  }
+function isAttachmentPart(part: MimePart): boolean {
+  if (part.children.length) return false;
+  if (part.disposition === "attachment") return true;
+  if (part.filename) return true;
+  return false;
+}
+
+interface Collected {
+  textBody: string;
+  htmlBody: string;
+  attachments: ParsedAttachment[];
+  warnings: string[];
+}
+
+function collect(root: MimePart): Collected {
+  const out: Collected = { textBody: "", htmlBody: "", attachments: [], warnings: [] };
+  walkParts(root, (part) => {
+    try {
+      if (part.malformed) {
+        out.warnings.push(
+          `A ${part.contentType || "MIME"} part could not be fully decoded and was analyzed as raw text.`,
+        );
+      }
+      if (part.children.length) return;
+
+      if (isAttachmentPart(part)) {
+        out.attachments.push({
+          filename: part.filename || "(unnamed attachment)",
+          contentType: part.contentType || "application/octet-stream",
+          sizeBytes: part.bytes.length,
+          sizeLabel: humanSize(part.bytes.length),
+          disposition: part.disposition || "attachment",
+          // Real SHA-256 is filled in by hashAttachments() over these bytes.
+          sha256: "",
+          payloadBase64: bytesToBase64(part.bytes),
+          malformed: part.malformed,
+        });
+        return;
+      }
+
+      if (part.contentType === "text/plain" && !out.textBody) out.textBody = part.text;
+      else if (part.contentType === "text/html" && !out.htmlBody) out.htmlBody = part.text;
+      else if (part.contentType.startsWith("text/") && !out.textBody) out.textBody = part.text;
+    } catch {
+      out.warnings.push("A MIME part was skipped because it could not be processed.");
+    }
+  });
   return out;
 }
 
@@ -110,29 +152,66 @@ export function parseEml(raw: string): ParsedEmail {
   const text = (raw ?? "").replace(/\r\n/g, "\n").trim();
   if (!text) throw new EmailParseError("The email file is empty.");
 
-  const splitIdx = text.indexOf("\n\n");
-  const headerBlock = splitIdx === -1 ? text : text.slice(0, splitIdx);
-  const body = splitIdx === -1 ? "" : text.slice(splitIdx + 2);
+  const { headerBlock } = splitHeadersAndBody(text);
 
-  const headers = unfoldHeaders(headerBlock);
-  const looksLikeEmail =
-    headers.some((h) => ["from", "to", "subject", "message-id", "received", "date"].includes(h.name.toLowerCase()));
+  let root: MimePart;
+  try {
+    root = parsePart(text);
+  } catch {
+    throw new EmailParseError("Invalid email file. Please upload a valid .EML file.");
+  }
+
+  const headers = root.headers.map((h) => ({ name: h.name, value: h.value }));
+  const looksLikeEmail = headers.some((h) =>
+    ["from", "to", "subject", "message-id", "received", "date"].includes(h.name.toLowerCase()),
+  );
   if (!looksLikeEmail) {
     throw new EmailParseError("Invalid email file. Please upload a valid .EML file.");
   }
 
-  const fromRaw = get(headers, "From");
-  const { email: from, displayName } = parseAddress(fromRaw);
-  const replyTo = parseAddress(get(headers, "Reply-To")).email;
-  const returnPath = parseAddress(get(headers, "Return-Path")).email;
-  const received = all(headers, "Received");
-  const authResults = [...all(headers, "Authentication-Results"), ...all(headers, "ARC-Authentication-Results")].join(" ");
+  const { textBody, htmlBody, attachments, warnings } = collect(root);
+  const bodyForAnalysis = textBody || (htmlBody ? htmlToText(htmlBody) : "");
 
-  const urls = Array.from(new Set((body.match(URL_RE) ?? []).map((u) => u.replace(/[.,;)]+$/, ""))));
+  const { email: from, displayName } = parseAddress(headerValue(root.headers, "From"));
+  const replyTo = parseAddress(headerValue(root.headers, "Reply-To")).email;
+  const returnPath = parseAddress(headerValue(root.headers, "Return-Path")).email;
+  const cc = parseAddressList(headerValue(root.headers, "Cc"));
+  const received = headerValues(root.headers, "Received");
+  const authResults = [
+    ...headerValues(root.headers, "Authentication-Results"),
+    ...headerValues(root.headers, "ARC-Authentication-Results"),
+  ].join(" ");
+
+  // Indicators — links from decoded plain text plus HTML href/src attributes.
+  const hrefs = Array.from(htmlBody.matchAll(/(?:href|src)\s*=\s*["']([^"']+)["']/gi)).map((m) => m[1]!);
+  const urlSource = [textBody, htmlBody, hrefs.join(" ")].join("\n");
+  const urls = Array.from(new Set((urlSource.match(URL_RE) ?? []).map((u) => u.replace(/[.,;)]+$/, ""))));
+
   const ipsSource = [...received, headerBlock].join(" ");
   const ips = Array.from(new Set((ipsSource.match(IP_RE) ?? []).filter(isPublicIp)));
 
-  const spfDirect = get(headers, "Received-SPF");
+  const emails = Array.from(
+    new Set(
+      [
+        from,
+        replyTo,
+        returnPath,
+        ...cc,
+        ...parseAddressList(headerValue(root.headers, "To")),
+        ...((bodyForAnalysis.match(EMAIL_RE) ?? []) as string[]),
+      ]
+        .filter((e) => e && e.includes("@"))
+        .map((e) => e.toLowerCase()),
+    ),
+  );
+
+  const domains = Array.from(
+    new Set(
+      [...urls.map(domainOfUrl), ...emails.map((e) => e.split("@")[1] ?? "")].filter(Boolean).map((d) => d.toLowerCase()),
+    ),
+  );
+
+  const spfDirect = headerValue(root.headers, "Received-SPF");
   const spf: AuthStatus = authResults
     ? authFromResults(authResults, "spf")
     : spfDirect
@@ -144,21 +223,31 @@ export function parseEml(raw: string): ParsedEmail {
   return {
     from: from || "UNKNOWN",
     displayName: displayName || "UNKNOWN",
-    to: parseAddress(get(headers, "To")).email || "UNKNOWN",
+    to: parseAddress(headerValue(root.headers, "To")).email || "UNKNOWN",
+    cc,
     replyTo: replyTo || "",
     returnPath: returnPath || "",
-    subject: get(headers, "Subject") || "(no subject)",
-    date: get(headers, "Date") || "UNKNOWN",
-    messageId: get(headers, "Message-ID") || "UNKNOWN",
+    subject: decodeEncodedWords(headerValue(root.headers, "Subject")) || "(no subject)",
+    date: headerValue(root.headers, "Date") || "UNKNOWN",
+    messageId: headerValue(root.headers, "Message-ID") || "UNKNOWN",
     received,
     headers,
     rawHeaders: headerBlock,
-    body,
+    body: bodyForAnalysis,
+    textBody,
+    htmlBody,
     urls,
     ips,
-    attachments: parseAttachments(body),
+    emails,
+    domains,
+    attachments,
     spfHeader: spf,
-    dkimHeader: authResults ? authFromResults(authResults, "dkim") : get(headers, "DKIM-Signature") ? "SUSPICIOUS" : "UNKNOWN",
+    dkimHeader: authResults
+      ? authFromResults(authResults, "dkim")
+      : headerValue(root.headers, "DKIM-Signature")
+        ? "SUSPICIOUS"
+        : "UNKNOWN",
     dmarcHeader: authResults ? authFromResults(authResults, "dmarc") : "UNKNOWN",
+    parseWarnings: Array.from(new Set(warnings)),
   };
 }
