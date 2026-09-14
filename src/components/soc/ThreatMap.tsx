@@ -42,9 +42,14 @@ export function ThreatMap({ points, height = 420 }: { points: IpIntel[]; height?
           })
             .addTo(map)
             .bindPopup(
-              `<strong>${p.ip}</strong><br/>${p.city}, ${p.country}<br/>${p.isp} (${p.asn})<br/>Abuse score: ${p.abuseScore}/100<br/><em>Demo geolocation data</em>`,
+              `<strong>${p.ip}</strong><br/>${p.city || "UNKNOWN"}, ${p.country || "UNKNOWN"}<br/>${p.isp || "UNKNOWN"} (${p.asn || "?"})<br/>Abuse score: ${p.abuseScore}/100<br/><em>Approximate IP geolocation${
+                p.accuracy_radius_km ? ` · accuracy radius ${p.accuracy_radius_km} km` : ""
+              }</em>`,
             );
-          L.circle([p.lat, p.lon], { radius: 120000, color, weight: 1, opacity: 0.35, fillOpacity: 0.08 }).addTo(map);
+          // Accuracy-radius circle when available; otherwise a conservative
+          // 150 km display halo so the dot is never read as an exact address.
+          const radiusKm = p.accuracy_radius_km && p.accuracy_radius_km > 0 ? p.accuracy_radius_km : 150;
+          L.circle([p.lat, p.lon], { radius: radiusKm * 1000, color, weight: 1, opacity: 0.35, fillOpacity: 0.08 }).addTo(map);
           bounds.push([p.lat, p.lon]);
         });
         if (bounds.length > 1) map.fitBounds(bounds, { padding: [40, 40] });

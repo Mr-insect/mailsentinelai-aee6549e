@@ -4,50 +4,56 @@ import { hashAttachments, sha256Hex } from "@/lib/hashing";
 import type { AnalysisResult, DomainIntel, IpIntel, UrlIntel } from "@/lib/types";
 
 /**
- * SERVICE LAYER
- * -------------
- * Single boundary between the UI and the analysis backend.
- *
- * Today every call is answered by the local demo engine, so the app runs with
- * zero configuration and zero API keys. When a Python/FastAPI backend exists,
- * set VITE_MAILSENTINEL_API_BASE and the same functions will POST to:
- *
- *   POST /api/analyze-email
- *   POST /api/analyze-headers
- *   GET  /api/ip-intelligence
- *   GET  /api/domain-intelligence
- *   GET  /api/url-intelligence
- *
- * Any network failure falls back to the demo engine, so the demo can never break.
- * Secrets stay on the backend — never in this file.
+ * SERVICE LAYER — frontend calls the FastAPI backend only.
+ * Security: no API keys here or in VITE_* vars. Provider keys stay
+ * in backend server env. Browser sends EML bytes; backend returns
+ * a normalized AnalysisResult with no secrets. Offline engine is
+ * the fallback so the UI never breaks.
  */
 
-export const API_BASE: string = (import.meta.env["VITE_MAILSENTINEL_API_BASE"] as string | undefined) ?? "";
+export const API_BASE: string =
+  ((import.meta.env["VITE_MAILSENTINEL_API_BASE"] as string | undefined) ?? "").replace(/\/$/, "");
 export const IS_DEMO_MODE = API_BASE === "";
 
 export const API_ROUTES = {
   analyzeEmail: "/api/analyze-email",
+  analyzeRaw: "/api/analyze-raw",
   analyzeHeaders: "/api/analyze-headers",
-  ipIntelligence: "/api/ip-intelligence",
-  domainIntelligence: "/api/domain-intelligence",
-  urlIntelligence: "/api/url-intelligence",
+  ipIntelligence: "/api/analyze-ip",
+  domainIntelligence: "/api/analyze-domain",
+  urlIntelligence: "/api/analyze-url",
+  health: "/api/health",
+  providerHealth: "/api/health/providers",
 } as const;
 
-async function tryBackend<T>(path: string, init?: RequestInit): Promise<T | null> {
-  if (!API_BASE) return null;
-  try {
-    const res = await fetch(`${API_BASE}${path}`, {
-      headers: { "Content-Type": "application/json" },
-      ...init,
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as T;
-  } catch {
-    return null; // graceful fallback to demo intelligence
-  }
+async function postFile<T>(path: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  const res = await fetch(`${API_BASE}${path}`, { method: "POST", body: form });
+  if (!res.ok) throw new Error(`Backend ${res.status}`);
+  return (await res.json()) as T;
+}
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Backend ${res.status}`);
+  return (await res.json()) as T;
 }
 
 export class AnalysisError extends Error {}
+
+/** Sanitized provider health status from GET /api/health/providers. */
+export interface ProviderHealthStatus {
+  status: "CONNECTED" | "DISABLED" | "RATE_LIMITED" | "ERROR" | "TIMEOUT" | "NOT_CONFIGURED";
+  configured?: boolean;
+  provider?: string;
+  model?: string;
+  note?: string;
+}
 
 async function localAnalyze(raw: string, bytes?: ArrayBuffer): Promise<AnalysisResult> {
   try {
@@ -70,23 +76,33 @@ async function localAnalyze(raw: string, bytes?: ArrayBuffer): Promise<AnalysisR
 }
 
 export const emailAnalysisService = {
-  /** Analyze raw .eml content (file upload or pasted text). */
+  /** Analyze raw .eml content (pasted text or demo samples) via backend, else offline. */
   async analyzeRawEmail(raw: string, fileBytes?: ArrayBuffer): Promise<AnalysisResult> {
     if (!raw || !raw.trim()) throw new AnalysisError("The email is empty. Paste content or upload an .EML file.");
-    const remote = await tryBackend<AnalysisResult>(API_ROUTES.analyzeEmail, {
-      method: "POST",
-      body: JSON.stringify({ raw }),
-    });
-    return remote ?? (await localAnalyze(raw, fileBytes));
+    if (API_BASE) {
+      try {
+        return (await postJson<AnalysisResult>(API_ROUTES.analyzeRaw, { raw })) as AnalysisResult;
+      } catch {
+        // fall through to offline engine
+      }
+    }
+    return localAnalyze(raw, fileBytes);
   },
 
-  /** Read + analyze an uploaded file. */
+  /** Upload file bytes to backend (multipart), else parse locally. */
   async analyzeFile(file: File): Promise<AnalysisResult> {
     const name = file.name.toLowerCase();
     if (!name.endsWith(".eml") && !name.endsWith(".txt") && !name.endsWith(".msg")) {
       throw new AnalysisError("Invalid email file. Please upload a valid .EML file.");
     }
     if (file.size > 8 * 1024 * 1024) throw new AnalysisError("File is too large. Please upload an .EML under 8 MB.");
+    if (API_BASE) {
+      try {
+        return (await postFile<AnalysisResult>(API_ROUTES.analyzeEmail, file)) as AnalysisResult;
+      } catch {
+        // fall through and read locally
+      }
+    }
     let text = "";
     let bytes: ArrayBuffer | undefined;
     try {
@@ -98,18 +114,63 @@ export const emailAnalysisService = {
     return this.analyzeRawEmail(text, bytes);
   },
 
+  async health(): Promise<{ status: string; service: string } | null> {
+    if (!API_BASE) return null;
+    try {
+      const res = await fetch(`${API_BASE}${API_ROUTES.health}`);
+      if (!res.ok) return null;
+      return (await res.json()) as { status: string; service: string };
+    } catch {
+      return null;
+    }
+  },
+
+  /** Sanitized provider status (Phase 17). No secrets are ever returned. */
+  async providerHealth(): Promise<Record<string, ProviderHealthStatus> | null> {
+    if (!API_BASE) return null;
+    try {
+      const res = await fetch(`${API_BASE}${API_ROUTES.providerHealth}`);
+      if (!res.ok) return null;
+      const body = (await res.json()) as { providers?: Record<string, ProviderHealthStatus> };
+      return body.providers ?? null;
+    } catch {
+      return null;
+    }
+  },
+
   async ipIntelligence(ip: string, fallback: IpIntel[]): Promise<IpIntel | null> {
-    const remote = await tryBackend<IpIntel>(`${API_ROUTES.ipIntelligence}?ip=${encodeURIComponent(ip)}`);
-    return remote ?? fallback.find((i) => i.ip === ip) ?? null;
+    if (API_BASE) {
+      try {
+        const remote = await postJson<IpIntel>(API_ROUTES.ipIntelligence, { value: ip });
+        if (remote && typeof remote === "object" && "ip" in remote) return remote;
+      } catch {
+        // fallback below
+      }
+    }
+    return fallback.find((i) => i.ip === ip) ?? null;
   },
 
   async domainIntelligence(domain: string, fallback: DomainIntel[]): Promise<DomainIntel | null> {
-    const remote = await tryBackend<DomainIntel>(`${API_ROUTES.domainIntelligence}?domain=${encodeURIComponent(domain)}`);
-    return remote ?? fallback.find((d) => d.domain === domain) ?? null;
+    if (API_BASE) {
+      try {
+        const remote = await postJson<DomainIntel>(API_ROUTES.domainIntelligence, { value: domain });
+        if (remote && typeof remote === "object") return remote;
+      } catch {
+        // fallback below
+      }
+    }
+    return fallback.find((d) => d.domain === domain) ?? null;
   },
 
   async urlIntelligence(url: string, fallback: UrlIntel[]): Promise<UrlIntel | null> {
-    const remote = await tryBackend<UrlIntel>(`${API_ROUTES.urlIntelligence}?url=${encodeURIComponent(url)}`);
-    return remote ?? fallback.find((u) => u.url === url) ?? null;
+    if (API_BASE) {
+      try {
+        const remote = await postJson<UrlIntel>(API_ROUTES.urlIntelligence, { value: url });
+        if (remote && typeof remote === "object" && "url" in remote) return remote;
+      } catch {
+        // fallback below
+      }
+    }
+    return fallback.find((u) => u.url === url) ?? null;
   },
 };
