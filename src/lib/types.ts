@@ -8,14 +8,22 @@ export interface ParsedAttachment {
   sizeLabel: string;
   /** Real SHA-256 (64 hex chars) of the decoded attachment bytes. */
   sha256: string;
-  /** Raw base64 MIME payload, used to compute the digest. */
+  /** Base64 of the decoded attachment bytes, used to compute the digest. */
   payloadBase64?: string;
+  /** Decoded byte length of the attachment. */
+  sizeBytes?: number;
+  /** Content-Disposition value ("attachment" / "inline"). */
+  disposition?: string;
+  /** True when the MIME part could not be fully decoded. */
+  malformed?: boolean;
 }
 
 export interface ParsedEmail {
   from: string;
   displayName: string;
   to: string;
+  /** Additional recipients from the CC header. */
+  cc: string[];
   replyTo: string;
   returnPath: string;
   subject: string;
@@ -24,13 +32,24 @@ export interface ParsedEmail {
   received: string[];
   headers: { name: string; value: string }[];
   rawHeaders: string;
+  /** Best-effort readable body (plain text, or HTML converted to text). */
   body: string;
+  /** Decoded text/plain body, when present. */
+  textBody: string;
+  /** Decoded text/html body, when present. */
+  htmlBody: string;
   urls: string[];
   ips: string[];
+  /** Email addresses found in headers and body. */
+  emails: string[];
+  /** Domains derived from URLs and email addresses. */
+  domains: string[];
   attachments: ParsedAttachment[];
   spfHeader: AuthStatus;
   dkimHeader: AuthStatus;
   dmarcHeader: AuthStatus;
+  /** Non-fatal issues encountered while decoding MIME parts. */
+  parseWarnings: string[];
 }
 
 export interface Indicator {
